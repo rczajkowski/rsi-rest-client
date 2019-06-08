@@ -1,23 +1,26 @@
 package com.rsi.kino.client.rest;
 
-
-import com.rsi.kino.client.KinoClient;
+import com.rsi.kino.client.domain.cinema.Kino;
 import com.rsi.kino.client.dto.CreateReservationDto;
-import com.rsi.kino.client.serve_kino.DocumentException_Exception;
-import com.rsi.kino.client.serve_kino.FileNotFoundException_Exception;
-import com.rsi.kino.client.serve_kino.Film;
-import com.rsi.kino.client.serve_kino.ObjectNotFoundException_Exception;
-import com.rsi.kino.client.serve_kino.Reservation;
+import com.rsi.kino.client.exception.ObjectNotFoundException;
+import com.rsi.kino.client.model.Film;
+import com.rsi.kino.client.model.Reservation;
+import com.rsi.kino.client.rest.resources.FilmResource;
 import java.io.File;
 import java.io.FileInputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.util.List;
+import java.util.Optional;
 import java.util.UUID;
-import org.springframework.core.io.ClassPathResource;
+import java.util.stream.Collectors;
 import org.springframework.core.io.InputStreamResource;
+import org.springframework.hateoas.Link;
+import org.springframework.hateoas.Resource;
+import org.springframework.hateoas.Resources;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
+import org.springframework.objenesis.ObjenesisException;
 import org.springframework.web.bind.annotation.CrossOrigin;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -28,66 +31,40 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestMethod;
 import org.springframework.web.bind.annotation.RequestParam;
-import org.springframework.web.bind.annotation.ResponseBody;
 import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.servlet.support.ServletUriComponentsBuilder;
 
 @RestController
-@RequestMapping("/films")
+@RequestMapping(value = "/films", produces = "application/hal+json")
 public class ClientController {
 
-	private final KinoClient kinoClient;
+	private final Kino kinoClient;
 
-	public ClientController(KinoClient kinoClient) {
+	public ClientController(Kino kinoClient) {
 		this.kinoClient = kinoClient;
 	}
 
 	@CrossOrigin(origins = "http://localhost:3000")
 	@GetMapping
-	public ResponseEntity<List<Film>> getAllFilms(){
-		return ResponseEntity.ok(kinoClient.getAllFilms());
+	public ResponseEntity<Resources<FilmResource>> getAllFilms(){
+		List<FilmResource> films = kinoClient.getAllFilms().stream().map(FilmResource::new).collect(Collectors.toList());
+		final Resources<FilmResource> resources = new Resources<>(films);
+		String uriString = ServletUriComponentsBuilder.fromCurrentRequest().build().toUriString();
+		resources.add(new Link(uriString, "self"));
+		ResponseEntity r = ResponseEntity.ok(resources);
+		System.out.println(r);
+		return r;
 	}
 
 	@CrossOrigin(origins = "http://localhost:3000")
-	@GetMapping("/reservation/user")
-	public ResponseEntity<List<Reservation>> getAllUserReservations() {
-		return ResponseEntity.ok(kinoClient.getAllReservations(kinoClient.getUserId()));
-	}
-
-	@CrossOrigin(origins = "http://localhost:3000")
-	@PostMapping("/{filmId}/reservation")
-	public ResponseEntity<String> makeReservation(@PathVariable("filmId") String filmId, @RequestBody CreateReservationDto reservationDto)
-			throws DocumentException_Exception, FileNotFoundException_Exception {
-		return ResponseEntity.ok(kinoClient.makeReservation(filmId, reservationDto.getDate(), reservationDto.getSeats()));
-	}
-
-	@CrossOrigin(origins = "http://localhost:3000")
-	@DeleteMapping("/resignation")
-	public ResponseEntity<String> resignation(@RequestParam String tokenResignation) throws ObjectNotFoundException_Exception {
-		return ResponseEntity.ok(kinoClient.resignation(tokenResignation));
-	}
-
-
-	@RequestMapping(value = "/pdf/{reservationId}", method = RequestMethod.GET, produces = "application/pdf")
-	public ResponseEntity<InputStreamResource> downloadPDFFile(@PathVariable("reservationId") UUID reservationId)
-			throws IOException {
-
-
-		File pdfFile = new File("/home/rafau/IdeaProjects/rsi/ps6/auth/client/src/main/resources/reservation-" + reservationId +".pdf");
-		InputStream targetStream = new FileInputStream(pdfFile);
-
-		return ResponseEntity
-				.ok()
-				.contentLength(pdfFile.length())
-				.contentType(
-						MediaType.parseMediaType("application/pdf"))
-				.body(new InputStreamResource(targetStream));
-	}
-
-
-	@CrossOrigin(origins = "http://localhost:3000")
-	@PutMapping("/reservation/{reservationId}")
-	public ResponseEntity<String> updateReservation(@PathVariable("reservationId") UUID reservationId, @RequestBody CreateReservationDto dto)
-			throws ObjectNotFoundException_Exception, DocumentException_Exception, FileNotFoundException_Exception {
-		return ResponseEntity.ok(kinoClient.updateReservation(reservationId.toString(), dto.getSeats()));
+	@GetMapping("/{filmId}")
+	public ResponseEntity<FilmResource> getById(@PathVariable("filmId")UUID fimlId){
+		return kinoClient.getAllFilms()
+				.stream()
+				.filter(f -> f.getId().equals(fimlId))
+				.findFirst()
+				.map(FilmResource::new)
+				.map(ResponseEntity::ok)
+				.orElseThrow(() -> new ObjenesisException("Nie znaleziono filmu o podanym id"));
 	}
 }
