@@ -1,7 +1,3 @@
-/*
- * To change this template, choose Tools | Templates
- * and open the template in the editor.
- */
 package com.rsi.kino.client.domain.cinema;
 
 import com.itextpdf.text.DocumentException;
